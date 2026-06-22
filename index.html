@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Attestation RDV">
+<meta name="theme-color" content="#1a5c1a">
+<title>Attestation RDV Repérages</title>
+<link rel="manifest" href="manifest.json">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --green: #1a5c1a;
+  --green-light: #e8f5e8;
+  --green-mid: #2a7a2a;
+  --blue: #185FA5;
+  --blue-light: #E6F1FB;
+  --fineuro: #1a3a6b;
+  --fineuro-light: #e8eef8;
+  --text: #1a1a1a;
+  --muted: #666;
+  --border: #ddd;
+  --bg: #f5f5f5;
+  --white: #fff;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --accent: #1a5c1a;
+  --accent-light: #e8f5e8;
+}
+html, body { height: 100%; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Arial, sans-serif; color: var(--text); }
+
+.nav { background: var(--accent); color: white; padding: env(safe-area-inset-top, 0) 0 0; position: sticky; top: 0; z-index: 100; }
+.nav-inner { display: flex; align-items: center; padding: 14px 16px; gap: 10px; }
+.nav-back { background: none; border: none; color: white; font-size: 17px; cursor: pointer; padding: 4px 8px 4px 0; display: none; align-items: center; gap: 4px; }
+.nav-back.visible { display: flex; }
+.nav-title { font-size: 17px; font-weight: 600; color: white; flex: 1; }
+.nav-step { font-size: 13px; color: rgba(255,255,255,0.7); }
+
+.step { display: none; padding: 16px; min-height: calc(100vh - 60px); }
+.step.active { display: block; }
+
+.card { background: var(--white); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; border: 1px solid var(--border); }
+.card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+
+.upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px 16px; text-align: center; cursor: pointer; background: var(--bg); }
+.upload-zone:active { background: var(--accent-light); border-color: var(--accent); }
+.upload-icon { font-size: 48px; margin-bottom: 10px; }
+.upload-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+.upload-sub { font-size: 14px; color: var(--muted); }
+#fileInput { display: none; }
+
+/* Entreprise badge */
+.entreprise-badge { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 14px; font-size: 15px; font-weight: 600; }
+.entreprise-badge.ecofrance { background: var(--green-light); color: var(--green); border: 1px solid #b2d8b2; }
+.entreprise-badge.fineuro { background: var(--fineuro-light); color: var(--fineuro); border: 1px solid #b2c4e0; }
+.entreprise-badge .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.entreprise-badge.ecofrance .dot { background: var(--green); }
+.entreprise-badge.fineuro .dot { background: var(--fineuro); }
+
+.search-input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 16px; background: var(--bg); margin-bottom: 12px; -webkit-appearance: none; }
+.search-input:focus { outline: none; border-color: var(--accent); background: var(--white); }
+.poste-count { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.poste-list { display: flex; flex-direction: column; gap: 0; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+.poste-item { background: var(--white); padding: 14px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+.poste-item:last-child { border-bottom: none; }
+.poste-item:active { background: var(--accent-light); }
+.poste-item.selected { background: var(--accent-light); border-left: 4px solid var(--accent); }
+.poste-commune { font-size: 16px; font-weight: 600; }
+.poste-gdo { font-size: 13px; color: var(--muted); }
+.poste-nom { font-size: 14px; }
+.no-results { padding: 24px; text-align: center; color: var(--muted); font-size: 15px; }
+
+.field-group { margin-bottom: 14px; }
+.field-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 5px; display: block; }
+.field-value { font-size: 16px; font-weight: 500; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* SELECT styled */
+.field-select { width: 100%; font-size: 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--white); -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; color: var(--text); }
+.field-select:focus { outline: none; border-color: var(--accent); }
+
+.net-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.net-btn { display: flex; align-items: center; gap: 8px; padding: 12px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; background: var(--white); font-size: 14px; font-weight: 500; }
+.net-btn:active { background: var(--accent-light); }
+.net-btn.checked { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+.net-check { width: 20px; height: 20px; border: 2px solid var(--border); border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; color: transparent; }
+.net-btn.checked .net-check { background: var(--accent); border-color: var(--accent); color: white; }
+.net-autre { grid-column: 1 / -1; }
+.autre-input { width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 15px; display: none; }
+.net-btn.checked ~ .autre-input { display: block; }
+.net-autre-wrap { grid-column: 1 / -1; display: flex; flex-direction: column; }
+
+.sig-block { margin-bottom: 14px; }
+.sig-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.sig-date { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.sig-canvas { width: 100%; height: 120px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--white); display: block; touch-action: none; cursor: crosshair; }
+.sig-clear { margin-top: 6px; padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px; background: transparent; font-size: 13px; color: var(--muted); cursor: pointer; }
+
+.btn-primary { display: block; width: 100%; padding: 16px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-size: 17px; font-weight: 600; cursor: pointer; margin-top: 16px; }
+.btn-primary:active { opacity: 0.85; transform: scale(0.99); }
+.btn-pdf { display: block; width: 100%; padding: 16px; background: var(--blue); color: white; border: none; border-radius: var(--radius-sm); font-size: 17px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+.btn-pdf:active { opacity: 0.85; transform: scale(0.99); }
+.error-msg { color: #A32D2D; font-size: 14px; margin-top: 8px; padding: 10px 12px; background: #FCEBEB; border-radius: var(--radius-sm); }
+.selected-badge { background: var(--accent-light); border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 14px; font-size: 14px; }
+.selected-badge strong { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="nav-inner">
+    <button class="nav-back" id="navBack" onclick="goBack()">&#8249; Retour</button>
+    <div class="nav-title" id="navTitle">Attestation RDV</div>
+    <div class="nav-step" id="navStep">1 / 3</div>
+  </div>
+</div>
+
+<!-- ÉTAPE 1 : Upload -->
+<div class="step active" id="step1">
+  <div class="card">
+    <div class="card-title">Bon de travail</div>
+    <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">📋</div>
+      <div class="upload-title">Charger le fichier Excel</div>
+      <div class="upload-sub">Appuyer pour sélectionner le bon de travail (.xlsx)</div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <div id="fileError"></div>
+  </div>
+</div>
+
+<!-- ÉTAPE 2 : Sélection du poste -->
+<div class="step" id="step2">
+  <div id="entrepriseBadge"></div>
+  <input type="search" class="search-input" id="searchBox" placeholder="🔍  Commune, code GDO, nom poste…" oninput="filterPostes()">
+  <div class="poste-count" id="posteCount"></div>
+  <div class="poste-list" id="posteList"></div>
+  <div id="selectError"></div>
+  <button class="btn-primary" onclick="goStep(3)">Remplir l'attestation →</button>
+</div>
+
+<!-- ÉTAPE 3 : Formulaire + Signatures -->
+<div class="step" id="step3">
+  <div id="selectedBadge" class="selected-badge"></div>
+
+  <div class="card">
+    <div class="card-title">Informations</div>
+
+    <div class="field-group">
+      <label class="field-label">Chargé de travaux</label>
+      <select class="field-select" id="f_charge">
+        <option value="M. TEIXEIRA">M. TEIXEIRA</option>
+        <option value="M. Pollet">M. Pollet</option>
+      </select>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Nom concessionnaire / privatif</label>
+      <input class="field-select" id="f_concess" type="text" placeholder="ex : ENEDIS, GRDF, Orange…" style="background-image:none;">
+    </div>
+
+    <div class="field-row">
+      <div class="field-group">
+        <label class="field-label">Commune</label>
+        <div class="field-value" id="f_commune">—</div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Code GDO</label>
+        <div class="field-value" id="f_gdo">—</div>
+      </div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Nom Poste</label>
+      <div class="field-value" id="f_poste">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Type de réseau</div>
+    <div class="net-grid">
+      <div class="net-btn" onclick="toggleNet(this)"><div class="net-check">✓</div><span>EAU / DRAIN</span></div>
+      <div class="net-btn" onclick="toggleNet(this)"><div class="net-check">✓</div><span>GAZ</span></div>
+      <div class="net-btn" onclick="toggleNet(this)"><div class="net-check">✓</div><span>FIBRE / TÉLÉCOM</span></div>
+      <div class="net-btn" onclick="toggleNet(this)"><div class="net-check">✓</div><span>BR ELEC</span></div>
+      <div class="net-autre-wrap">
+        <div class="net-btn net-autre" onclick="toggleNet(this)"><div class="net-check">✓</div><span>AUTRE</span></div>
+        <input class="autre-input" id="autreText" placeholder="Préciser le type de réseau…">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Signatures</div>
+    <div class="sig-block">
+      <div class="sig-label">CHARGÉ DE TRAVAUX</div>
+      <div class="sig-date" id="dateCharge"></div>
+      <canvas class="sig-canvas" id="sigCharge"></canvas>
+      <button class="sig-clear" onclick="clearSig('sigCharge')">✕ Effacer</button>
+    </div>
+    <div class="sig-block">
+      <div class="sig-label">CONCESSIONNAIRE / PRIVÉ</div>
+      <div class="sig-date" id="dateConcess"></div>
+      <canvas class="sig-canvas" id="sigConcess"></canvas>
+      <button class="sig-clear" onclick="clearSig('sigConcess')">✕ Effacer</button>
+    </div>
+  </div>
+
+  <button class="btn-pdf" onclick="generatePDF()">⬇︎ Télécharger le PDF</button>
+  <div style="height: max(env(safe-area-inset-bottom), 24px);"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+let allPostes = [];
+let selectedPoste = null;
+let currentStep = 1;
+let entreprise = 'ECOFRANCE';
+
+const ENTREPRISES = {
+  ECOFRANCE: {
+    nom: 'ECOFRANCE',
+    couleur: '#1a5c1a',
+    footer1: 'ECOFRANCE BASE NORD — 114 impasse du Mont-Martin 14110 CONDÉ-EN-NORMANDIE / 02 31 69 30 72',
+    footer2: 'ECOFRANCE BASE SUD — 918 Avenue de la Confluence 47160 DAMAZAN / 09 65 33 89 81 — ecofrance@outlook.fr',
+  },
+  FINEURO: {
+    nom: 'FINEURO',
+    couleur: '#1a3a6b',
+    footer1: 'FINEURO — Estelle PLEYNARD',
+    footer2: '06 70 21 91 39 — estelle.pleynard@outlook.fr',
+  }
+};
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      detectEntreprise(data);
+      parsePostes(data);
+    } catch(err) {
+      showError('fileError', 'Erreur de lecture. Vérifiez que c\'est bien un fichier Excel (.xlsx).');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function detectEntreprise(data) {
+  // Cherche dans les premières cellules le nom de l'entreprise
+  for (let r = 0; r < Math.min(5, data.length); r++) {
+    const row = data[r].join(' ').toUpperCase();
+    if (row.includes('FINEURO')) { entreprise = 'FINEURO'; break; }
+    if (row.includes('ECOFRANCE')) { entreprise = 'ECOFRANCE'; break; }
+  }
+  // Met à jour la couleur de la nav et les variables CSS
+  const e = ENTREPRISES[entreprise];
+  document.querySelector('.nav').style.background = e.couleur;
+  document.documentElement.style.setProperty('--accent', e.couleur);
+  document.documentElement.style.setProperty('--accent-light', entreprise === 'FINEURO' ? '#e8eef8' : '#e8f5e8');
+  // Badge entreprise step 2
+  document.getElementById('entrepriseBadge').innerHTML =
+    `<div class="entreprise-badge ${entreprise.toLowerCase()}">
+       <div class="dot"></div>
+       Fichier détecté : <strong>${e.nom}</strong>
+     </div>`;
+}
+
+function showError(id, msg) {
+  document.getElementById(id).innerHTML = '<div class="error-msg">' + msg + '</div>';
+}
+
+function parsePostes(data) {
+  allPostes = [];
+  let communeCol = -1, gdoCol = -1, posteCol = -1;
+  for (let r = 0; r < Math.min(10, data.length); r++) {
+    const row = data[r].map(c => String(c).toUpperCase());
+    for (let c = 0; c < row.length; c++) {
+      if (row[c].includes('COMMUNE') && communeCol < 0) communeCol = c;
+      if ((row[c].includes('CODE GDO') || row[c] === 'GDO') && gdoCol < 0) gdoCol = c;
+      if ((row[c].includes('NOM DU POSTE') || row[c].includes('NOM POSTE')) && posteCol < 0) posteCol = c;
+    }
+    if (communeCol >= 0 && gdoCol >= 0 && posteCol >= 0) break;
+  }
+  if (communeCol < 0) { communeCol = 0; gdoCol = 1; posteCol = 2; }
+  for (let r = 1; r < data.length; r++) {
+    const row = data[r];
+    const commune = String(row[communeCol] || '').trim();
+    const gdo = String(row[gdoCol] || '').trim();
+    const poste = String(row[posteCol] || '').trim();
+    if (commune && commune.length > 1 && commune.toUpperCase() !== 'COMMUNE') {
+      allPostes.push({ commune, gdo, poste });
+    }
+  }
+  if (allPostes.length === 0) {
+    showError('fileError', 'Aucune donnée trouvée. Vérifiez la structure du fichier Excel.');
+    return;
+  }
+  renderPostes(allPostes);
+  goStep(2);
+}
+
+function renderPostes(list) {
+  const container = document.getElementById('posteList');
+  document.getElementById('posteCount').textContent = list.length + ' poste' + (list.length > 1 ? 's' : '');
+  if (list.length === 0) { container.innerHTML = '<div class="no-results">Aucun résultat</div>'; return; }
+  container.innerHTML = list.map(p => {
+    const sel = selectedPoste === p ? ' selected' : '';
+    const idx = allPostes.indexOf(p);
+    return `<div class="poste-item${sel}" onclick="selectPoste(${idx})">
+      <div class="poste-commune">${p.commune}</div>
+      <div class="poste-gdo">${p.gdo}</div>
+      <div class="poste-nom">${p.poste}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectPoste(idx) {
+  selectedPoste = allPostes[idx];
+  document.getElementById('selectError').innerHTML = '';
+  filterPostes();
+}
+
+function filterPostes() {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const filtered = q ? allPostes.filter(p =>
+    p.commune.toLowerCase().includes(q) ||
+    p.gdo.toLowerCase().includes(q) ||
+    p.poste.toLowerCase().includes(q)
+  ) : allPostes;
+  renderPostes(filtered);
+}
+
+function goStep(n) {
+  if (n === 3) {
+    if (!selectedPoste) { showError('selectError', 'Veuillez sélectionner un poste.'); return; }
+    fillAttestation();
+  }
+  currentStep = n;
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step' + n).classList.add('active');
+  document.getElementById('navStep').textContent = n + ' / 3';
+  document.getElementById('navBack').className = n > 1 ? 'nav-back visible' : 'nav-back';
+  const titles = { 1: 'Attestation RDV', 2: 'Choisir le poste', 3: 'Signer & Exporter' };
+  document.getElementById('navTitle').textContent = titles[n];
+  window.scrollTo(0, 0);
+  if (n === 3) setTimeout(() => { setupCanvas('sigCharge'); setupCanvas('sigConcess'); }, 100);
+}
+
+function goBack() { goStep(currentStep - 1); }
+
+function fillAttestation() {
+  document.getElementById('f_commune').textContent = selectedPoste.commune;
+  document.getElementById('f_gdo').textContent = selectedPoste.gdo;
+  document.getElementById('f_poste').textContent = selectedPoste.poste;
+  const today = new Date().toLocaleDateString('fr-FR');
+  document.getElementById('dateCharge').textContent = 'Date : ' + today;
+  document.getElementById('dateConcess').textContent = 'Date : ' + today;
+  const e = ENTREPRISES[entreprise];
+  document.getElementById('selectedBadge').innerHTML =
+    `<span style="color:${e.couleur};font-weight:600;">${e.nom}</span> — ${selectedPoste.commune} — ${selectedPoste.gdo} — ${selectedPoste.poste}`;
+}
+
+function toggleNet(el) { el.classList.toggle('checked'); }
+
+function setupCanvas(id) {
+  const canvas = document.getElementById(id);
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.round(rect.width * window.devicePixelRatio);
+  canvas.height = Math.round(rect.height * window.devicePixelRatio);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  let drawing = false, lx = 0, ly = 0;
+  function pos(e) {
+    const r = canvas.getBoundingClientRect();
+    if (e.touches) return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  canvas.addEventListener('mousedown', e => { drawing = true; const p = pos(e); lx = p.x; ly = p.y; });
+  canvas.addEventListener('mousemove', e => { if (!drawing) return; const p = pos(e); ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(p.x, p.y); ctx.stroke(); lx = p.x; ly = p.y; });
+  canvas.addEventListener('mouseup', () => drawing = false);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = pos(e); lx = p.x; ly = p.y; }, { passive: false });
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!drawing) return; const p = pos(e); ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(p.x, p.y); ctx.stroke(); lx = p.x; ly = p.y; }, { passive: false });
+  canvas.addEventListener('touchend', () => drawing = false);
+}
+
+function clearSig(id) {
+  const canvas = document.getElementById(id);
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  const today = new Date().toLocaleDateString('fr-FR');
+  const charge = document.getElementById('f_charge').value;
+  const concess = document.getElementById('f_concess').value || '';
+  const commune = document.getElementById('f_commune').textContent;
+  const gdo = document.getElementById('f_gdo').textContent;
+  const poste = document.getElementById('f_poste').textContent;
+  const netChecked = [];
+  document.querySelectorAll('.net-btn.checked span').forEach(b => netChecked.push(b.textContent.trim()));
+  const autreVal = document.getElementById('autreText').value;
+  const e = ENTREPRISES[entreprise];
+
+  // Couleur entreprise en RGB
+  const hexToRgb = h => { const r = parseInt(h.slice(1,3),16), g = parseInt(h.slice(3,5),16), b = parseInt(h.slice(5,7),16); return [r,g,b]; };
+  const [cr, cg, cb] = hexToRgb(e.couleur);
+
+  const lm = 15, cw = 180;
+  let y = 15;
+  doc.setDrawColor(80); doc.setLineWidth(0.4);
+
+  // HEADER
+  doc.rect(lm, y, 48, 22);
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(cr, cg, cb);
+  doc.text(e.nom, lm + 24, y + 10, { align: 'center' });
+  doc.setFontSize(6); doc.setTextColor(100, 100, 100);
+  doc.text('Le spécialiste des terres', lm + 24, y + 16, { align: 'center' });
+  doc.rect(lm + 48, y, cw - 48, 22);
+  doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+  doc.text('ATTESTATION DE RDV REPÉRAGES', lm + 48 + (cw-48)/2, y + 7, { align: 'center' });
+  doc.text('RÉSEAUX ET TRAVAUX', lm + 48 + (cw-48)/2, y + 13, { align: 'center' });
+  doc.text('DOMAINE PUBLIC ET PRIVÉ', lm + 48 + (cw-48)/2, y + 19, { align: 'center' });
+  y += 22;
+
+  // CHARGÉ / CONCESSIONNAIRE
+  doc.rect(lm, y, 90, 16); doc.rect(lm+90, y, cw-90, 16);
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+  doc.text('Chargé de travaux :', lm+2, y+5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+  doc.text(charge, lm+2, y+12);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+  doc.text('NOM CONCESSIONNAIRE / PRIVATIF :', lm+92, y+5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+  doc.text(concess, lm+92, y+12);
+  y += 16;
+
+  // COMMUNE / GDO / POSTE
+  doc.rect(lm, y, 65, 14); doc.rect(lm+65, y, 55, 14); doc.rect(lm+120, y, cw-120, 14);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+  doc.text('Commune :', lm+2, y+5);
+  doc.text('Code GDO :', lm+67, y+5);
+  doc.text('Nom Poste :', lm+122, y+5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+  doc.text(commune, lm+2, y+11);
+  doc.text(gdo, lm+67, y+11);
+  doc.text(poste, lm+122, y+11);
+  y += 14;
+
+  // RÉSEAUX
+  doc.rect(lm, y, cw, 7); doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(0);
+  doc.text('Cocher la case :', lm+2, y+5);
+  y += 7;
+  doc.rect(lm, y, cw, 12);
+  const netItems = [['EAU / DRAIN','EAU'],['GAZ','GAZ'],['FIBRE / TÉLÉCOM','FIBRE'],['BR ELEC','BR ELEC'],['AUTRE','AUTRE']];
+  let nx = lm+3;
+  netItems.forEach(([label, key]) => {
+    const checked = netChecked.some(r => r.includes(key));
+    doc.rect(nx, y+3, 5, 5);
+    if (checked) { doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('X', nx+0.8, y+7.5); }
+    doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    let txt = label; if (key==='AUTRE' && autreVal) txt += ': '+autreVal;
+    doc.text(txt, nx+7, y+7);
+    nx += 36;
+  });
+  y += 12;
+
+  // ATTESTE
+  doc.rect(lm, y, cw, 9);
+  doc.setFont('helvetica','italic'); doc.setFontSize(10);
+  doc.text("Atteste avoir fait un repérage terrain avec l'équipe " + e.nom, lm+cw/2, y+6, { align:'center' });
+  y += 9;
+
+  // SIGNATURES HEADER
+  doc.setFillColor(220,220,220); doc.rect(lm, y, cw, 8, 'FD');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(0);
+  doc.text('SIGNATURES / DATE', lm+cw/2, y+5.5, { align:'center' });
+  y += 8;
+
+  // SIGNATURES
+  const sigH = 42;
+  doc.rect(lm, y, cw/2, sigH); doc.rect(lm+cw/2, y, cw/2, sigH);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('CHARGÉ DE TRAVAUX :', lm+2, y+6);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text('DATE : '+today, lm+2, y+11);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('CONCESSIONNAIRE / PRIVÉ :', lm+cw/2+2, y+6);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text('DATE : '+today, lm+cw/2+2, y+11);
+  doc.addImage(document.getElementById('sigCharge').toDataURL('image/png'), 'PNG', lm+2, y+13, cw/2-4, sigH-16);
+  doc.addImage(document.getElementById('sigConcess').toDataURL('image/png'), 'PNG', lm+cw/2+2, y+13, cw/2-4, sigH-16);
+  y += sigH;
+
+  // FOOTER
+  doc.rect(lm, y, cw, 14);
+  doc.setFontSize(7); doc.setTextColor(80);
+  doc.text(e.footer1, lm+cw/2, y+5, { align:'center' });
+  doc.text(e.footer2, lm+cw/2, y+10, { align:'center' });
+
+  const fname = `Attestation_${e.nom}_${commune}_${poste}_${today.replace(/\//g,'-')}.pdf`.replace(/\s+/g,'_');
+  doc.save(fname);
+}
+</script>
+</body>
+</html>
