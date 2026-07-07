@@ -123,10 +123,10 @@ html, body { height: 100%; background: var(--bg); font-family: -apple-system, Bl
     <div class="card-title">Bon de travail</div>
     <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
       <div class="upload-icon">📋</div>
-      <div class="upload-title">Charger le fichier Excel</div>
-      <div class="upload-sub">Appuyer pour sélectionner le bon de travail (.xlsx)</div>
+      <div class="upload-title">Charger le planning PDF ou Excel</div>
+      <div class="upload-sub">Appuyer pour sélectionner le bon de travail (.pdf, .xlsx)</div>
     </div>
-    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <input type="file" id="fileInput" accept=".pdf,.xlsx,.xls,application/pdf">
     <div id="fileError"></div>
   </div>
 </div>
@@ -159,6 +159,11 @@ html, body { height: 100%; background: var(--bg); font-family: -apple-system, Bl
     <div class="field-group">
       <label class="field-label">Nom concessionnaire / privatif</label>
       <input class="field-select" id="f_concess" type="text" placeholder="ex : ENEDIS, GRDF, Orange…" style="background-image:none;">
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Date de l'attestation</label>
+      <input class="field-select" id="f_date" type="date" style="background-image:none;" onchange="updateDateLabels()">
     </div>
 
     <div class="field-row">
@@ -212,6 +217,7 @@ html, body { height: 100%; background: var(--bg); font-family: -apple-system, Bl
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 let allPostes = [];
@@ -234,42 +240,312 @@ const ENTREPRISES = {
   }
 };
 
-document.getElementById('fileInput').addEventListener('change', function(e) {
+document.getElementById('fileInput').addEventListener('change', async function(e) {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(ev) {
-    try {
-      const wb = XLSX.read(ev.target.result, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      detectEntreprise(data);
-      parsePostes(data);
-    } catch(err) {
-      showError('fileError', 'Erreur de lecture. Vérifiez que c\'est bien un fichier Excel (.xlsx).');
+  document.getElementById('fileError').innerHTML = '';
+  selectedPoste = null;
+
+  try {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.pdf') || file.type === 'application/pdf') {
+      await readPdfPlanning(file);
+    } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      await readExcelPlanning(file);
+    } else {
+      showError('fileError', 'Format non accepté. Charge un fichier PDF ou Excel.');
     }
-  };
-  reader.readAsArrayBuffer(file);
+  } catch(err) {
+    console.error(err);
+    showError('fileError', 'Erreur de lecture. Vérifie que le fichier est bien un planning PDF ou Excel.');
+  }
 });
 
-function detectEntreprise(data) {
-  // Cherche dans les premières cellules le nom de l'entreprise
-  for (let r = 0; r < Math.min(5, data.length); r++) {
-    const row = data[r].join(' ').toUpperCase();
-    if (row.includes('FINEURO')) { entreprise = 'FINEURO'; break; }
-    if (row.includes('ECOFRANCE')) { entreprise = 'ECOFRANCE'; break; }
+async function readExcelPlanning(file) {
+  const buffer = await file.arrayBuffer();
+  const wb = XLSX.read(buffer, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  detectEntreprise(data);
+  parsePostes(data);
+}
+
+async function readPdfPlanning(file) {
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
-  // Met à jour la couleur de la nav et les variables CSS
+
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  let fullText = '';
+  let allRows = [];
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+    const items = content.items
+      .filter(i => String(i.str || '').trim())
+      .map(i => ({
+        text: String(i.str).trim(),
+        x: i.transform[4],
+        y: Math.round(i.transform[5])
+      }));
+
+    fullText += ' ' + items.map(i => i.text).join(' ');
+    allRows = allRows.concat(groupPdfItemsByLine(items, pageNum));
+  }
+
+  detectEntreprise(fullText);
+  parsePostesFromPdfRows(allRows);
+}
+
+function groupPdfItemsByLine(items, pageNum) {
+  const lines = new Map();
+  items.forEach(it => {
+    const key = Math.round(it.y / 3) * 3;
+    if (!lines.has(key)) lines.set(key, []);
+    lines.get(key).push(it);
+  });
+  return Array.from(lines.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([y, arr]) => ({ page: pageNum, y, items: arr.sort((a, b) => a.x - b.x) }));
+}
+
+function detectEntreprise(source) {
+  let text = '';
+  if (Array.isArray(source)) {
+    text = source.flat().join(' ');
+  } else {
+    text = String(source || '');
+  }
+
+  const upper = text.toUpperCase();
+  if (upper.includes('FINEURO') || upper.includes('FIN EURO')) {
+    entreprise = 'FINEURO';
+  } else if (upper.includes('ECOFRANCE') || upper.includes('ECO FRANCE')) {
+    entreprise = 'ECOFRANCE';
+  } else {
+    entreprise = 'ECOFRANCE'; // valeur par défaut si rien n'est détecté
+  }
+
+  updateEntrepriseUI();
+}
+
+function updateEntrepriseUI() {
   const e = ENTREPRISES[entreprise];
   document.querySelector('.nav').style.background = e.couleur;
   document.documentElement.style.setProperty('--accent', e.couleur);
   document.documentElement.style.setProperty('--accent-light', entreprise === 'FINEURO' ? '#e8eef8' : '#e8f5e8');
-  // Badge entreprise step 2
   document.getElementById('entrepriseBadge').innerHTML =
     `<div class="entreprise-badge ${entreprise.toLowerCase()}">
        <div class="dot"></div>
        Fichier détecté : <strong>${e.nom}</strong>
      </div>`;
+}
+
+function parsePostesFromPdfRows(rows) {
+  const postes = [];
+  const seen = new Set();
+  const gdoRegex = /\b\d{5}[A-Z]\d{4}\b/i;
+  let headerByPage = {};
+
+  function findHeader(row) {
+    const items = row.items;
+    const up = t => String(t || '').toUpperCase();
+    const commune = items.find(i => up(i.text).includes('COMMUNE'));
+    const gdo = items.find(i => up(i.text).includes('CODE GDO') || up(i.text) === 'GDO');
+    const poste = items.find(i => up(i.text).includes('NOM DU POSTE') || up(i.text).includes('NOM POSTE'));
+    if (!commune || !gdo || !poste) return null;
+
+    // Attention : ne pas chercher juste "COM", sinon on retombe sur "COMMUNE".
+    let com = items.find(i => i.x > poste.x && (up(i.text).includes('M GAU') || up(i.text) === 'COM'));
+    if (!com) {
+      com = items
+        .filter(i => i.x > poste.x + 20)
+        .sort((a, b) => a.x - b.x)[0];
+    }
+
+    return {
+      communeX: commune.x,
+      gdoX: gdo.x,
+      posteX: poste.x,
+      comX: com ? com.x : poste.x + 120
+    };
+  }
+
+  function lineText(row) {
+    return row.items.map(i => i.text).join(' ');
+  }
+
+  // Première passe : mémorise l'emplacement des colonnes pour chaque page.
+  for (const row of rows) {
+    const joined = lineText(row).toUpperCase();
+    if (joined.includes('COMMUNE') && joined.includes('CODE GDO') && joined.includes('POSTE')) {
+      const h = findHeader(row);
+      if (h) headerByPage[row.page || 1] = h;
+    }
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const codeItem = row.items.find(it => gdoRegex.test(it.text));
+    if (!codeItem) continue;
+
+    const code = codeItem.text.match(gdoRegex)[0].toUpperCase();
+    const header = headerByPage[row.page || 1] || {
+      communeX: 0,
+      gdoX: codeItem.x,
+      posteX: codeItem.x + 55,
+      comX: codeItem.x + 160
+    };
+
+    // On regroupe toutes les petites lignes de la même ligne de tableau,
+    // jusqu'au prochain Code GDO. Cela évite de perdre les noms en 2 lignes
+    // comme "CAP D / OUSTRAL" ou "GUILLEM / ARNAUD".
+    const blockRows = [row];
+    for (let j = i + 1; j < rows.length; j++) {
+      const next = rows[j];
+      if ((next.page || 1) !== (row.page || 1)) break;
+      const txt = lineText(next).toUpperCase();
+      if (txt.includes('COMMUNE') && txt.includes('CODE GDO')) break;
+      if (next.items.some(it => gdoRegex.test(it.text))) break;
+      blockRows.push(next);
+    }
+
+    let communeParts = [];
+    let posteParts = [];
+
+    for (const br of blockRows) {
+      for (const it of br.items) {
+        const x = it.x;
+        const t = cleanCell(it.text);
+        if (!t) continue;
+        if (x >= header.communeX - 12 && x < header.gdoX - 6) communeParts.push(t);
+        if (x >= header.posteX - 10 && x < header.comX - 6) posteParts.push(t);
+      }
+    }
+
+    let commune = cleanCell(communeParts.join(' '));
+    let poste = cleanCell(posteParts.join(' '));
+
+    // Fallback si le PDF n'a pas conservé les colonnes correctement.
+    if (!commune || !poste) {
+      const idx = row.items.indexOf(codeItem);
+      commune = commune || (idx > 0 ? cleanCell(row.items[idx - 1].text) : '');
+      poste = poste || (idx + 1 < row.items.length ? cleanCell(row.items[idx + 1].text) : '');
+    }
+
+    // Nettoyages de sécurité : le nom du poste ne doit pas absorber les colonnes suivantes.
+    poste = poste
+      .replace(gdoRegex, '')
+      .replace(/\b(TM|TN|T3|S4)\b.*$/i, '')
+      .replace(/\bAmélioration\b.*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    commune = commune
+      .replace(gdoRegex, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!commune || !poste) continue;
+    if (commune.toUpperCase().includes('COMMUNE')) continue;
+    if (poste.toUpperCase().includes('NOM DU POSTE')) continue;
+
+    const key = commune + '|' + code + '|' + poste;
+    if (!seen.has(key)) {
+      seen.add(key);
+      postes.push({ commune, gdo: code, poste });
+    }
+  }
+
+  // Si l'extraction par colonnes PDF ne marche pas, on utilise une méthode texte plus tolérante.
+  if (postes.length === 0) {
+    postes.push(...parsePostesFromPdfTextRows(rows));
+  }
+
+  allPostes = postes;
+  if (allPostes.length === 0) {
+    showError('fileError', 'Aucun poste trouvé dans le PDF. Essaie avec le planning Excel ou envoie-moi ce PDF pour que j'adapte le détecteur.');
+    return;
+  }
+
+  renderPostes(allPostes);
+  goStep(2);
+}
+
+function parsePostesFromPdfTextRows(rows) {
+  const found = [];
+  const seen = new Set();
+  const gdoRegex = /\b\d{5}[A-Z]\d{4}\b/i;
+  const lines = rows.map(r => r.items.map(i => cleanCell(i.text)).join(' ')).filter(Boolean);
+
+  function beforeStop(txt) {
+    return cleanCell(String(txt || '')
+      .replace(/\b(TM|TN|T3|S4)\b.*$/i, '')
+      .replace(/\bAm[ée]lioration\b.*$/i, '')
+      .replace(/\bV[ée]rifier\b.*$/i, '')
+      .replace(/\bdu neutre\b.*$/i, '')
+      .replace(/\bde terres\b.*$/i, '')
+      .replace(/\bterre des\b.*$/i, '')
+      .replace(/\b\d{2}\.\d+.*$/i, '')
+      .replace(/[✓!()]+/g, ' '));
+  }
+
+  function keepPostePart(txt) {
+    txt = beforeStop(txt);
+    if (!txt) return '';
+    const up = txt.toUpperCase();
+    if (up.includes('COMMUNE') || up.includes('CODE GDO') || up.includes('NOM DU POSTE')) return '';
+    if (up.includes('STREET VIEW') || up.includes('RESEAU') || up.includes('AUTORISATION')) return '';
+    if (/^(M|N|M-N)\s*[-–]/i.test(txt)) return '';
+    if (/^(RDV|LIEN CARTO|BON DE TRAVAIL|NOM FICHIER|PLAQUE|BOULES|PHOTO)/i.test(txt)) return '';
+    if (txt.length > 35) return '';
+    // On garde surtout les segments en majuscules : CAP D, OUSTRAL, EN FERRAND, 31546J1206, etc.
+    const letters = txt.replace(/[^A-Za-zÀ-ÿ]/g, '');
+    if (letters && txt !== txt.toUpperCase() && !/^\d{5}[A-Z]\d{4}$/i.test(txt)) return '';
+    return txt;
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(gdoRegex);
+    if (!m) continue;
+
+    const code = m[0].toUpperCase();
+    const left = cleanCell(lines[i].slice(0, m.index));
+    const right = cleanCell(lines[i].slice(m.index + m[0].length));
+    const commune = beforeStop(left).replace(/[^A-ZÀ-Ÿ0-9' -]/g, ' ').replace(/\s+/g, ' ').trim();
+    const posteParts = [];
+
+    const firstPart = keepPostePart(right);
+    if (firstPart) posteParts.push(firstPart);
+
+    for (let j = i + 1; j < Math.min(lines.length, i + 8); j++) {
+      if (gdoRegex.test(lines[j])) break;
+      const part = keepPostePart(lines[j]);
+      if (part) posteParts.push(part);
+      // Dès qu'on arrive à la colonne gamme/propriétaires, on arrête.
+      if (/Am[ée]lioration|Recherches propri|Courrier envoy/i.test(lines[j])) break;
+    }
+
+    let poste = cleanCell(posteParts.join(' '));
+    poste = poste.replace(/\b(COM|M GAU|latitude|longitude|RM|Qt|NORME|RNG|EAU)\b.*$/i, '').trim();
+
+    if (!commune || !poste) continue;
+    const key = commune + '|' + code + '|' + poste;
+    if (!seen.has(key)) {
+      seen.add(key);
+      found.push({ commune, gdo: code, poste });
+    }
+  }
+  return found;
+}
+
+function cleanCell(v) {
+  return String(v || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\uFFFE/g, '')
+    .trim();
 }
 
 function showError(id, msg) {
@@ -291,9 +567,9 @@ function parsePostes(data) {
   if (communeCol < 0) { communeCol = 0; gdoCol = 1; posteCol = 2; }
   for (let r = 1; r < data.length; r++) {
     const row = data[r];
-    const commune = String(row[communeCol] || '').trim();
-    const gdo = String(row[gdoCol] || '').trim();
-    const poste = String(row[posteCol] || '').trim();
+    const commune = cleanCell(row[communeCol]);
+    const gdo = cleanCell(row[gdoCol]);
+    const poste = cleanCell(row[posteCol]);
     if (commune && commune.length > 1 && commune.toUpperCase() !== 'COMMUNE') {
       allPostes.push({ commune, gdo, poste });
     }
@@ -355,13 +631,37 @@ function goStep(n) {
 
 function goBack() { goStep(currentStep - 1); }
 
+function todayISO() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function formatDateFR(isoDate) {
+  if (!isoDate) return new Date().toLocaleDateString('fr-FR');
+  const [y, m, d] = isoDate.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function getAttestationDateFR() {
+  const input = document.getElementById('f_date');
+  if (!input.value) input.value = todayISO();
+  return formatDateFR(input.value);
+}
+
+function updateDateLabels() {
+  const date = getAttestationDateFR();
+  document.getElementById('dateCharge').textContent = 'Date : ' + date;
+  document.getElementById('dateConcess').textContent = 'Date : ' + date;
+}
+
 function fillAttestation() {
   document.getElementById('f_commune').textContent = selectedPoste.commune;
   document.getElementById('f_gdo').textContent = selectedPoste.gdo;
   document.getElementById('f_poste').textContent = selectedPoste.poste;
-  const today = new Date().toLocaleDateString('fr-FR');
-  document.getElementById('dateCharge').textContent = 'Date : ' + today;
-  document.getElementById('dateConcess').textContent = 'Date : ' + today;
+  if (!document.getElementById('f_date').value) document.getElementById('f_date').value = todayISO();
+  updateDateLabels();
   const e = ENTREPRISES[entreprise];
   document.getElementById('selectedBadge').innerHTML =
     `<span style="color:${e.couleur};font-weight:600;">${e.nom}</span> — ${selectedPoste.commune} — ${selectedPoste.gdo} — ${selectedPoste.poste}`;
@@ -399,7 +699,7 @@ function clearSig(id) {
 function generatePDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-  const today = new Date().toLocaleDateString('fr-FR');
+  const today = getAttestationDateFR();
   const charge = document.getElementById('f_charge').value;
   const concess = document.getElementById('f_concess').value || '';
   const commune = document.getElementById('f_commune').textContent;
