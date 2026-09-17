@@ -1,6 +1,6 @@
 {
-  "name": "Attestation RDV",
-  "short_name": "Attestation RDV",
+  "name": "RDV & Autorisation",
+  "short_name": "RDV & Autorisation",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
