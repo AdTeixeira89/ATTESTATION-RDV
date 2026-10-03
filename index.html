@@ -111,8 +111,9 @@ body.dark .admin-sub{color:#ccc}
 .entreprise-pick-btn.ecofrance:active{background:#e8f5e8;border-color:#1a5c1a}
 .entreprise-pick-btn.fineuro{color:#1a3a6b}
 .entreprise-pick-btn.fineuro:active{background:#e8eef8;border-color:#1a3a6b}
-.pick-logo{display:none;max-width:100%;max-height:60px;margin:0 auto 10px;object-fit:contain}
+.pick-logo{display:none;max-width:100%;max-height:90px;margin:0 auto;object-fit:contain}
 .pick-logo.show{display:block}
+.pick-logo.show+.pick-name{display:none}
 </style>
 </head>
 <body>
@@ -174,8 +175,8 @@ body.dark .admin-sub{color:#ccc}
       <div class="card-title">Nouvelle autorisation</div>
       <div style="font-size:15px;font-weight:700;margin-bottom:14px">Pour quelle entreprise souhaitez-vous créer cette autorisation ?</div>
       <div class="entreprise-pick">
-        <button type="button" class="entreprise-pick-btn ecofrance" onclick="chooseAuthEntreprise('ECOFRANCE')"><img class="pick-logo" id="pickLogoECOFRANCE" alt=""><span>ECOFRANCE</span></button>
-        <button type="button" class="entreprise-pick-btn fineuro" onclick="chooseAuthEntreprise('FINEURO')"><img class="pick-logo" id="pickLogoFINEURO" alt=""><span>FINEURO</span></button>
+        <button type="button" class="entreprise-pick-btn ecofrance" onclick="chooseAuthEntreprise('ECOFRANCE')"><img class="pick-logo" id="pickLogoECOFRANCE" alt="ECOFRANCE"><span class="pick-name">ECOFRANCE</span></button>
+        <button type="button" class="entreprise-pick-btn fineuro" onclick="chooseAuthEntreprise('FINEURO')"><img class="pick-logo" id="pickLogoFINEURO" alt="FINEURO"><span class="pick-name">FINEURO</span></button>
       </div>
     </div>
   </div>
