@@ -1,7 +1,7 @@
 /* Service worker : rend l'application utilisable hors connexion.
    Bump CACHE_VERSION à chaque déploiement qui change l'un des fichiers ci-dessous
    (sinon les appareils déjà installés continueraient de servir l'ancienne version en cache). */
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const CACHE_NAME = 'rdv-cache-' + CACHE_VERSION;
 
 const APP_SHELL = [
